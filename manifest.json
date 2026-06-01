@@ -1,7 +1,7 @@
 {
   "name": "Timer Hardcore de Treino",
   "short_name": "TimerTreino",
-  "start_url": "treino.html",
+  "start_url": "index.html",
   "display": "standalone",
   "background_color": "#121212",
   "theme_color": "#4CAF50",
