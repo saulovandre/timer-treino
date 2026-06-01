@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Timer de Treino</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            transition: background-color 0.5s ease;
+        }
+        h1 { color: #4CAF50; margin-bottom: 5px; }
+        .status {
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 15px;
+            color: #888;
+        }
+        .container {
+            text-align: center;
+            background: #1e1e1e;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            max-width: 350px;
+            width: 90%;
+        }
+        .timer {
+            font-size: 5rem;
+            margin: 15px 0;
+            font-weight: bold;
+            font-family: monospace;
+        }
+        .inputs-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        label { font-size: 0.9rem; color: #bbb; }
+        input {
+            width: 100%;
+            padding: 10px;
+            font-size: 1.2rem;
+            text-align: center;
+            border-radius: 5px;
+            border: none;
+            background: #333;
+            color: white;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 15px 25px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            width: 45%;
+        }
+        .start { background-color: #4CAF50; color: white; }
+        .stop { background-color: #f44336; color: white; }
+        
+        /* Cores de estado */
+        .exercicio { background-color: #1b4d22; }
+        .descanso { background-color: #4a1515; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1 id="titulo">Timer Hardcore</h1>
+    <div class="status" id="status-texto">Pronto</div>
+    
+    <div class="inputs-grid">
+        <div>
+            <label for="intervalo">Apito/Vibra a cada:</label>
+            <input type="number" id="intervalo" value="10" min="1">
+            <small style="color: #777;">(segundos)</small>
+        </div>
+        <div>
+            <label for="descanso">Tempo de Descanso:</label>
+            <input type="number" id="descanso" value="30" min="1">
+            <small style="color: #777;">(segundos)</small>
+        </div>
+    </div>
+
+    <div class="timer" id="display">00:00</div>
+
+    <button class="start" onclick="iniciarTreino()">Iniciar</button>
+    <button class="stop" onclick="pararTreino()">Parar</button>
+</div>
+
+<script>
+    let cronometro;
+    let segundosContados = 0;
+    let tempoDescansoRestante = 0;
+    let modo = 'parado'; // 'exercicio', 'descanso', 'parado'
+    let audioCtx = null;
+
+    function emitirSinal() {
+        // 1. Alerta Sonoro (Apito)
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        let oscilador = audioCtx.createOscillator();
+        let ganho = audioCtx.createGain();
+        
+        oscilador.type = 'sine';
+        oscilador.frequency.setValueAtTime(880, audioCtx.currentTime); 
+        ganho.gain.setValueAtTime(0.6, audioCtx.currentTime); 
+        
+        oscilador.connect(ganho);
+        ganho.connect(audioCtx.destination);
+        
+        oscilador.start();
+        oscilador.stop(audioCtx.currentTime + 0.4); // Apito um pouquinho mais longo
+
+        // 2. Alerta de Vibração (Vibra por 500 milissegundos)
+        if (navigator.vibrate) {
+            navigator.vibrate(500);
+        }
+    }
+
+    function emitirSinalDescansoFim() {
+        // Dois apitos rápidos e duas vibrações para avisar que o descanso acabou
+        if (navigator.vibrate) {
+            navigator.vibrate([200, 100, 200]);
+        }
+        // Apito duplo manual
+        setTimeout(emitirSinal, 0);
+        setTimeout(emitirSinal, 300);
+    }
+
+    function atualizarDisplay(segundos) {
+        let minutos = Math.floor(segundos / 60);
+        let seg = segundos % 60;
+        document.getElementById('display').innerText = 
+            `${minutos.toString().padStart(2, '0')}:${seg.toString().padStart(2, '0')}`;
+    }
+
+    function iniciarTreino() {
+        clearInterval(cronometro);
+        if (modo === 'parado') {
+            segundosContados = 0;
+        }
+        
+        modo = 'exercicio';
+        document.body.className = 'exercicio';
+        document.getElementById('status-texto').innerText = "Em Exercício";
+        document.getElementById('status-texto').style.color = "#4CAF50";
+
+        let intervaloApito = parseInt(document.getElementById('intervalo').value);
+        let tempoDescansoMax = parseInt(document.getElementById('descanso').value);
+        
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        cronometro = setInterval(() => {
+            if (modo === 'exercicio') {
+                segundosContados++;
+                atualizarDisplay(segundosContados);
+
+                // Apita e vibra no intervalo X definido
+                if (segundosContados % intervaloApito === 0) {
+                    emitirSinal();
+                    
+                    // Entra em modo descanso logo após o sinal
+                    modo = 'descanso';
+                    tempoDescansoRestante = tempoDescansoMax;
+                    document.body.className = 'descanso';
+                    document.getElementById('status-texto').innerText = "Descansar!";
+                    document.getElementById('status-texto').style.color = "#f44336";
+                    atualizarDisplay(tempoDescansoRestante);
+                }
+            } else if (modo === 'descanso') {
+                tempoDescansoRestante--;
+                atualizarDisplay(tempoDescansoRestante);
+
+                if (tempoDescansoRestante <= 0) {
+                    // Fim do descanso, volta pro exercício
+                    emitirSinalDescansoFim();
+                    modo = 'exercicio';
+                    segundosContados = 0;
+                    document.body.className = 'exercicio';
+                    document.getElementById('status-texto').innerText = "Em Exercício";
+                    document.getElementById('status-texto').style.color = "#4CAF50";
+                    atualizarDisplay(segundosContados);
+                }
+            }
+        }, 1000);
+    }
+
+    function pararTreino() {
+        clearInterval(cronometro);
+        modo = 'parado';
+        document.body.className = '';
+        document.getElementById('status-texto').innerText = "Pronto";
+        document.getElementById('status-texto').style.color = "#888";
+        document.getElementById('display').innerText = "00:00";
+        segundosContados = 0;
+        if (navigator.vibrate) navigator.vibrate(0); // Cancela qualquer vibração ativa
+    }
+</script>
+
+</body>
+</html>

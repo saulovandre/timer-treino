@@ -1,0 +1,16 @@
+{
+  "name": "Timer Hardcore de Treino",
+  "short_name": "TimerTreino",
+  "start_url": "treino.html",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#4CAF50",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icone.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
