@@ -103,69 +103,59 @@
     <button class="stop" onclick="pararTreino()">Parar</button>
 </div>
 
+<audio id="audio-bipe" src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA== "></audio>
+
 <script>
     let cronometro;
     let segundosContados = 0;
     let tempoDescansoRestante = 0;
-    let modo = 'parado'; // 'exercicio', 'descanso', 'parado'
+    let modo = 'parado'; 
     let audioCtx = null;
-    
-    // --- Nova Seção: Wake Lock (Manter Tela Ligada) ---
     let wakeLock = null;
 
-    // Função para solicitar o bloqueio de hibernação da tela
     async function solicitarWakeLock() {
         if ('wakeLock' in navigator) {
-            try {
-                wakeLock = await navigator.wakeLock.request('screen');
-                wakeLock.addEventListener('release', () => {
-                    console.log('Wake Lock foi liberado.');
-                });
-                console.log('Wake Lock está ativo.');
-            } catch (err) {
-                console.error(`Erro ao solicitar Wake Lock: ${err.name}, ${err.message}`);
-            }
-        } else {
-            console.warn('Wake Lock API não é suportada neste navegador.');
+            try { wakeLock = await navigator.wakeLock.request('screen'); } 
+            catch (err) { console.error(err); }
         }
     }
 
-    // Função para liberar o bloqueio quando o treino para
     function liberarWakeLock() {
-        if (wakeLock !== null) {
-            wakeLock.release();
-            wakeLock = null;
-            console.log('Wake Lock liberado manualmente.');
-        }
+        if (wakeLock !== null) { wakeLock.release(); wakeLock = null; }
     }
-    // ---------------------------------------------------
 
     function emitirSinal() {
-        if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // Método 1: Toca o elemento de áudio HTML (ignora o modo silencioso se o volume de mídia estiver alto)
+        const audioElement = document.getElementById('audio-bipe');
+        if (audioElement) {
+            audioElement.currentTime = 0;
+            audioElement.play().catch(e => console.log("Erro ao tocar áudio nativo:", e));
         }
-        let oscilador = audioCtx.createOscillator();
-        let ganho = audioCtx.createGain();
-        
-        oscilador.type = 'sine';
-        oscilador.frequency.setValueAtTime(880, audioCtx.currentTime); 
-        ganho.gain.setValueAtTime(0.6, audioCtx.currentTime); 
-        
-        oscilador.connect(ganho);
-        ganho.connect(audioCtx.destination);
-        
-        oscilador.start();
-        oscilador.stop(audioCtx.currentTime + 0.4);
 
+        // Método 2: Mantém o oscilador antigo por garantia caso o navegador bloqueie o elemento acima
+        try {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            let oscilador = audioCtx.createOscillator();
+            let ganho = audioCtx.createGain();
+            oscilador.type = 'sine';
+            oscilador.frequency.setValueAtTime(988, audioCtx.currentTime); // Tom ligeiramente mais agudo
+            ganho.gain.setValueAtTime(0.8, audioCtx.currentTime); 
+            oscilador.connect(ganho);
+            ganho.connect(audioCtx.destination);
+            oscilador.start();
+            oscilador.stop(audioCtx.currentTime + 0.3);
+        } catch(e) { console.log(e); }
+
+        // Alerta de Vibração (Esse sempre salva a pátria no silencioso)
         if (navigator.vibrate) {
-            navigator.vibrate(500);
+            navigator.vibrate(600);
         }
     }
 
     function emitirSinalDescansoFim() {
-        if (navigator.vibrate) {
-            navigator.vibrate([200, 100, 200]);
-        }
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
         setTimeout(emitirSinal, 0);
         setTimeout(emitirSinal, 300);
     }
@@ -177,16 +167,17 @@
             `${minutos.toString().padStart(2, '0')}:${seg.toString().padStart(2, '0')}`;
     }
 
-    // Função iniciarTreino atualizada para solicitar o Wake Lock
     async function iniciarTreino() {
         clearInterval(cronometro);
-        if (modo === 'parado') {
-            segundosContados = 0;
-        }
+        if (modo === 'parado') segundosContados = 0;
         
-        // --- NOVO: Solicita o Wake Lock assim que começa ---
         await solicitarWakeLock();
-        // ---------------------------------------------------
+
+        // Destrava o áudio nativo no primeiro clique do usuário (exigência dos celulares)
+        const audioElement = document.getElementById('audio-bipe');
+        if (audioElement) {
+            audioElement.play().then(() => audioElement.pause()).catch(e => console.log(e));
+        }
 
         modo = 'exercicio';
         document.body.className = 'exercicio';
@@ -195,10 +186,6 @@
 
         let intervaloApito = parseInt(document.getElementById('intervalo').value);
         let tempoDescansoMax = parseInt(document.getElementById('descanso').value);
-        
-        if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
 
         cronometro = setInterval(() => {
             if (modo === 'exercicio') {
@@ -231,14 +218,9 @@
         }, 1000);
     }
 
-    // Função pararTreino atualizada para liberar o Wake Lock
     function pararTreino() {
         clearInterval(cronometro);
-        
-        // --- NOVO: Libera o Wake Lock quando para ---
         liberarWakeLock();
-        // --------------------------------------------
-
         modo = 'parado';
         document.body.className = '';
         document.getElementById('status-texto').innerText = "Pronto";
