@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super Timer de Treino</title>
+    <title>Timer Hardcore de Treino</title>
     <link rel="manifest" href="manifest.json">
     <style>
         body {
@@ -109,9 +109,38 @@
     let tempoDescansoRestante = 0;
     let modo = 'parado'; // 'exercicio', 'descanso', 'parado'
     let audioCtx = null;
+    
+    // --- Nova Seção: Wake Lock (Manter Tela Ligada) ---
+    let wakeLock = null;
+
+    // Função para solicitar o bloqueio de hibernação da tela
+    async function solicitarWakeLock() {
+        if ('wakeLock' in navigator) {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+                wakeLock.addEventListener('release', () => {
+                    console.log('Wake Lock foi liberado.');
+                });
+                console.log('Wake Lock está ativo.');
+            } catch (err) {
+                console.error(`Erro ao solicitar Wake Lock: ${err.name}, ${err.message}`);
+            }
+        } else {
+            console.warn('Wake Lock API não é suportada neste navegador.');
+        }
+    }
+
+    // Função para liberar o bloqueio quando o treino para
+    function liberarWakeLock() {
+        if (wakeLock !== null) {
+            wakeLock.release();
+            wakeLock = null;
+            console.log('Wake Lock liberado manualmente.');
+        }
+    }
+    // ---------------------------------------------------
 
     function emitirSinal() {
-        // 1. Alerta Sonoro (Apito)
         if (!audioCtx) {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         }
@@ -126,20 +155,17 @@
         ganho.connect(audioCtx.destination);
         
         oscilador.start();
-        oscilador.stop(audioCtx.currentTime + 0.4); // Apito um pouquinho mais longo
+        oscilador.stop(audioCtx.currentTime + 0.4);
 
-        // 2. Alerta de Vibração (Vibra por 500 milissegundos)
         if (navigator.vibrate) {
             navigator.vibrate(500);
         }
     }
 
     function emitirSinalDescansoFim() {
-        // Dois apitos rápidos e duas vibrações para avisar que o descanso acabou
         if (navigator.vibrate) {
             navigator.vibrate([200, 100, 200]);
         }
-        // Apito duplo manual
         setTimeout(emitirSinal, 0);
         setTimeout(emitirSinal, 300);
     }
@@ -151,12 +177,17 @@
             `${minutos.toString().padStart(2, '0')}:${seg.toString().padStart(2, '0')}`;
     }
 
-    function iniciarTreino() {
+    // Função iniciarTreino atualizada para solicitar o Wake Lock
+    async function iniciarTreino() {
         clearInterval(cronometro);
         if (modo === 'parado') {
             segundosContados = 0;
         }
         
+        // --- NOVO: Solicita o Wake Lock assim que começa ---
+        await solicitarWakeLock();
+        // ---------------------------------------------------
+
         modo = 'exercicio';
         document.body.className = 'exercicio';
         document.getElementById('status-texto').innerText = "Em Exercício";
@@ -174,11 +205,8 @@
                 segundosContados++;
                 atualizarDisplay(segundosContados);
 
-                // Apita e vibra no intervalo X definido
                 if (segundosContados % intervaloApito === 0) {
                     emitirSinal();
-                    
-                    // Entra em modo descanso logo após o sinal
                     modo = 'descanso';
                     tempoDescansoRestante = tempoDescansoMax;
                     document.body.className = 'descanso';
@@ -191,7 +219,6 @@
                 atualizarDisplay(tempoDescansoRestante);
 
                 if (tempoDescansoRestante <= 0) {
-                    // Fim do descanso, volta pro exercício
                     emitirSinalDescansoFim();
                     modo = 'exercicio';
                     segundosContados = 0;
@@ -204,15 +231,21 @@
         }, 1000);
     }
 
+    // Função pararTreino atualizada para liberar o Wake Lock
     function pararTreino() {
         clearInterval(cronometro);
+        
+        // --- NOVO: Libera o Wake Lock quando para ---
+        liberarWakeLock();
+        // --------------------------------------------
+
         modo = 'parado';
         document.body.className = '';
         document.getElementById('status-texto').innerText = "Pronto";
         document.getElementById('status-texto').style.color = "#888";
         document.getElementById('display').innerText = "00:00";
         segundosContados = 0;
-        if (navigator.vibrate) navigator.vibrate(0); // Cancela qualquer vibração ativa
+        if (navigator.vibrate) navigator.vibrate(0);
     }
 </script>
 
